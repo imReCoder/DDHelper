@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start"
   },
-  "engine": {
+  "engines": {
     "node": "16.13.0"
   },
   "dependencies": {
