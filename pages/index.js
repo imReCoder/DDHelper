@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import service from "../services/service";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faHandPaper } from "@fortawesome/free-solid-svg-icons";
+import Collapse from 'react-bootstrap/Collapse';
 
 // We'll limit the processing size to 200px.
 const maxVideoSize = 224;
@@ -44,7 +45,7 @@ export default function Page() {
   let [loading, setLoading] = useState(true);
   let [fps, setFps] = useState(0);
   let [words, setWords] = useState("");
-
+  const [open, setOpen] = useState(false);
   /**
    * In the onClick event we'll capture a frame within
    * the video to pass it to our service.
@@ -195,6 +196,23 @@ export default function Page() {
         </div>
       )}
       <div style={{ display: loading ? "none" : "block" }}>
+        <div className="signs">
+          <button
+            onClick={() => setOpen(!open)}
+            aria-controls="example-collapse-text"
+            aria-expanded={open}
+            className="btn btn-default"
+            style={{ marginBottom: "1em" }}
+          >
+            Show Signs
+          </button>
+          <Collapse in={open}>
+            <div id="example-collapse-text" className="sign-img">
+              {/* show signs.png */}
+              <img src="signs.png" style={{ height: "50%" }}></img>
+            </div>
+          </Collapse>
+        </div>
         <div className="row justify-content-center">
           <div className="col-xs-12 text-center video">
             <video className="video" playsInline ref={videoElement} />
