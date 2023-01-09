@@ -48,6 +48,8 @@ export default function Page() {
   let [fps, setFps] = useState(0);
   let [words, setWords] = useState("");
   const [open, setOpen] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [video, setVideo] = useState(null);
   /**
    * In the onClick event we'll capture a frame within
    * the video to pass it to our service.
@@ -135,6 +137,7 @@ export default function Page() {
    */
   useEffect(() => {
     let serviceLoaded = false;
+
     cameraSelectEl.current.addEventListener('change', () => changeCamera());
 
     function changeCamera() {
@@ -201,6 +204,8 @@ export default function Page() {
     async function load(source) {
       const videoLoaded = await initCamera(source);
       videoLoaded.play();
+      setVideo(videoLoaded);
+      setPlaying(true);
       if (!serviceLoaded) {
         await service.load();
         setTimeout(processImage, 0);
@@ -219,6 +224,18 @@ export default function Page() {
     setLetter(null);
     setFps(0);
     setWords("");
+  }
+
+  function togglePlay() {
+    console.log("Toggle playing..", video);
+    if (!video) return;
+    if (playing) {
+      video.pause();
+    } else {
+      video.play();
+    }
+
+    setPlaying(!playing);
   }
   return (
     <div style={{ marginTop: "1em" }}>
@@ -317,6 +334,8 @@ export default function Page() {
             </h2>
             {/* create button and call onclick function */}
             <button className="btn btn-info btn-sm" style={{margin:"10px"}} onClick={reset}>Reset</button>
+            <button className="btn btn-success btn-sm" style={{ margin: "10px" }} onClick={togglePlay}>{playing ? "Pause" : "Play"}</button>
+
             <p className="text-fps">FPS: {fps.toFixed(3)}</p>
           </div>
         </div>
