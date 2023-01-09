@@ -137,7 +137,7 @@ export default function Page() {
    */
   useEffect(() => {
     let serviceLoaded = false;
-
+    let cameraFetched = false;
     cameraSelectEl.current.addEventListener('change', () => changeCamera());
 
     function changeCamera() {
@@ -166,6 +166,7 @@ export default function Page() {
             }
 
             console.log(device);
+            cameraFetched = true;
             resolve(device)
           });
         }).catch(function (e) {
@@ -177,7 +178,10 @@ export default function Page() {
     async function initCamera(videoSource) {
       videoElement.current.width = maxVideoSize;
       videoElement.current.height = maxVideoSize;
-      await fetchAllCameras();
+      if (!cameraFetched) {
+        await fetchAllCameras();
+      }
+
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
