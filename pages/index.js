@@ -3,6 +3,7 @@ import service from "../services/service";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faHandPaper } from "@fortawesome/free-solid-svg-icons";
 import Collapse from 'react-bootstrap/Collapse';
+import Form from 'react-bootstrap/Form';
 
 // We'll limit the processing size to 200px.
 const maxVideoSize = 224;
@@ -41,6 +42,7 @@ export default function Page() {
   const videoElement = useRef(null);
   const canvasEl = useRef(null);
   const outputCanvasEl = useRef(null);
+  const cameraSelectEl = useRef(null);
   let [letter, setLetter] = useState(null);
   let [loading, setLoading] = useState(true);
   let [fps, setFps] = useState(0);
@@ -132,15 +134,52 @@ export default function Page() {
    * element to show what's on camera.
    */
   useEffect(() => {
-    async function initCamera() {
+    let serviceLoaded = false;
+    cameraSelectEl.current.addEventListener('change', () => changeCamera());
+
+    function changeCamera() {
+      const videoSource = cameraSelectEl.current.value;
+      console.log("Camera change ", videoSource);
+      load(videoSource);
+    }
+    async function fetchAllCameras() {
+      return new Promise((resolve, reject) => {
+        navigator.mediaDevices.enumerateDevices().then((devices) => {
+          let videoSourcesSelect = cameraSelectEl.current;
+
+          // Iterate over all the list of devices (InputDeviceInfo and MediaDeviceInfo)
+          devices.forEach((device) => {
+            let option = new Option();
+            option.value = device.deviceId;
+
+            // According to the type of media device
+            switch (device.kind) {
+              // Append device to list of Cameras
+              case "videoinput":
+                option.text = device.label || `Camera ${videoSourcesSelect.length + 1}`;
+                videoSourcesSelect.appendChild(option);
+                break;
+
+            }
+
+            console.log(device);
+            resolve(device)
+          });
+        }).catch(function (e) {
+          console.log(e.name + ": " + e.message);
+          reject(e)
+        });
+      })
+    }
+    async function initCamera(videoSource) {
       videoElement.current.width = maxVideoSize;
       videoElement.current.height = maxVideoSize;
-
+      await fetchAllCameras();
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: {
-            facingMode: "environment",
+            deviceId: videoSource ? { exact: videoSource } : undefined,
             width: maxVideoSize,
             height: maxVideoSize,
           },
@@ -159,17 +198,22 @@ export default function Page() {
       return Promise.reject(errorMessage);
     }
 
-    async function load() {
-      const videoLoaded = await initCamera();
-      await service.load();
+    async function load(source) {
+      const videoLoaded = await initCamera(source);
       videoLoaded.play();
-      setTimeout(processImage, 0);
+      if (!serviceLoaded) {
+        await service.load();
+        setTimeout(processImage, 0);
+        serviceLoaded = true;
+      }
+
       setLoading(false);
       return videoLoaded;
     }
 
     load();
   }, []);
+
 
   function reset() {
     setLetter(null);
@@ -212,6 +256,10 @@ export default function Page() {
               <img src="signs.png" style={{ height: "50%" }}></img>
             </div>
           </Collapse>
+          <Form.Control ref={cameraSelectEl} className="video-select" as="select">
+            <option>Select Camera</option>
+
+          </Form.Control>
         </div>
         <div className="row justify-content-center">
           <div className="col-xs-12 text-center video">
