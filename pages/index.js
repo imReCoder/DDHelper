@@ -173,7 +173,7 @@ export default function Page() {
    */
   useEffect(() => {
     const delay = (ms) => new Promise((res) => setTimeout(res, ms));
-    const newSocket = io(`http://65.0.100.151`);
+    const newSocket = io(`https://control.whatsspot.in`);
     setSocket(newSocket);
     let manualWord = "";
     const messageListener = async (message) => {
