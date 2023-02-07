@@ -12,7 +12,7 @@ function predict({ msg, payload }) {
   const prediction = model.predict(tensor);
   const predictedLetter = prediction.argMax(1).dataSync();
   const confidence = prediction.dataSync()[0];
-  postMessage({ msg, payload: predictedLetter });
+  postMessage({ msg, confidence, payload: predictedLetter });
   tensor.dispose();
   prediction.dispose();
   tf.engine().endScope();

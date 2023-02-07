@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import service from "../services/service";
+import io from 'socket.io-client';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faHandPaper } from "@fortawesome/free-solid-svg-icons";
 import Collapse from 'react-bootstrap/Collapse';
 import Form from 'react-bootstrap/Form';
 
+import service from "../services/service";
 // We'll limit the processing size to 200px.
 const maxVideoSize = 224;
 const LETTERS = [
@@ -27,17 +28,6 @@ const THRESHOLDS = {
   N: 6,
   R: 5,
 };
-/**
- * What we're going to render is:
- *
- * 1. A video component so the user can see what's on the camera.
- *
- * 2. A button to generate an image of the video, load OpenCV and
- * process the image.
- *
- * 3. A canvas to allow us to capture the image of the video and
- * show it to the user.
- */
 export default function Page() {
   const videoElement = useRef(null);
   const canvasEl = useRef(null);
@@ -50,10 +40,39 @@ export default function Page() {
   const [open, setOpen] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [video, setVideo] = useState(null);
-  /**
-   * In the onClick event we'll capture a frame within
-   * the video to pass it to our service.
-   */
+  const [socket, setSocket] = useState(null);
+  let [isAuto, setIsAuto] = useState(false);
+
+  async function guessWord(manualWords) {
+    return new Promise((resolve, reject) => {
+      const wordsSplit = manualWords.split(" ");
+      console.log("Guessing word: ", wordsSplit[wordsSplit.length - 1]);
+      const wordToGuess = wordsSplit[wordsSplit.length - 1];
+      if (wordToGuess.length < 3) {
+        speechSynthesis.speak(new SpeechSynthesisUtterance(wordToGuess));
+        return resolve(wordToGuess);
+      }
+      if (wordToGuess == "PARUL") {
+        speechSynthesis.speak(new SpeechSynthesisUtterance(wordToGuess));
+        return resolve(wordToGuess);
+      }
+      fetch(`/api/autocorrect?word=${wordsSplit[wordsSplit.length - 1]}`)
+        .then((res) => res.json())
+        .then((json) => {
+          const correctedWord = json["correctedWord"];
+          speechSynthesis.speak(new SpeechSynthesisUtterance(correctedWord));
+          wordsSplit.pop();
+          let _words =
+            wordsSplit.join(" ") + " " + correctedWord.toUpperCase() + " ";
+          setWords(
+            wordsSplit.join(" ") + " " + correctedWord.toUpperCase() + " "
+          );
+          console.log("Corrected word: ", correctedWord);
+          resolve(correctedWord);
+        });
+    });
+  }
+
   async function processImage() {
     if (
       videoElement !== null &&
@@ -68,6 +87,8 @@ export default function Page() {
       let _words = "";
 
       const processWord = () => {
+        console.log("isAuto ", isAuto);
+        if (!isAuto) return;
         let wordsSplit = _words.split(" ");
         fetch(`/api/autocorrect?word=${wordsSplit[wordsSplit.length - 1]}`)
           .then((res) => res.json())
@@ -80,10 +101,11 @@ export default function Page() {
             setWords(
               wordsSplit.join(" ") + " " + correctedWord.toUpperCase() + " "
             );
+            console.log("Corrected word: ", correctedWord);
           });
       };
 
-      videoElement.current.addEventListener("ended", () => processWord());
+      // videoElement.current.addEventListener("ended", () => processWord());
 
       while (true) {
         const ctx = canvasEl.current.getContext("2d");
@@ -96,24 +118,36 @@ export default function Page() {
         ctxOutput.putImageData(processedImage.data.payload, 0, 0);
 
         const prediction = await service.predict(processedImage.data.payload);
-
         const predictedLetter = prediction.data.payload;
-        const letterValue = LETTERS[predictedLetter];
+        const confidence = prediction.data.confidence;
+        let letterValue = LETTERS[predictedLetter];
+        if (isAuto) {
+          // if (confidence < 0.5) letterValue = "_NOTHING";
+          if (confidence > 0.4) {
+            // console.log("-------------------------------------------")
+            // console.log(letterValue + " confidence " + prediction.data.confidence + " count " + count);
+            // console.log("-----------------------------------------")
+          }
+        // console.log(letterValue + " confidence " + prediction.data.confidence + " count " + count);
 
         setLetter(letterValue);
+
+
         if (letterValue !== prevLetter) {
           if (
             !THRESHOLDS[prevLetter]
               ? count > THRESHOLD
               : count > THRESHOLDS[prevLetter]
           ) {
-            if (prevLetter === "_SPACE") processWord();
+            if (prevLetter === "_SPACE" && isAuto) processWord();
             else {
               _words = _words + (prevLetter === "_NOTHING" ? "" : prevLetter);
               setWords(
                 (state, props) =>
                   state + (prevLetter === "_NOTHING" ? "" : prevLetter)
               );
+              console.log("Words: ", _words);
+
             }
           }
           count = 0;
@@ -121,6 +155,7 @@ export default function Page() {
           count++;
         }
         prevLetter = letterValue;
+        }
         frames++;
         if (frames === 10) {
           setFps(10 / ((Date.now() - start) / 1000));
@@ -136,6 +171,63 @@ export default function Page() {
    * element to show what's on camera.
    */
   useEffect(() => {
+    const delay = (ms) => new Promise((res) => setTimeout(res, ms));
+    const newSocket = io(`http://localhost:3000`);
+    setSocket(newSocket);
+    let manualWord = "";
+    const messageListener = async (message) => {
+      // set random letter
+      let randomLetter = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+      setLetter(randomLetter);
+      await delay(200);
+
+      randomLetter = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+      setLetter(randomLetter);
+      await delay(100);
+
+      setLetter(message);
+      if (message == "_SPACE") {
+
+        setWords(
+          (state, props) =>
+            state + " ");
+        guessWord(manualWord);
+        manualWord = manualWord + " ";
+        return;
+      }
+      manualWord = manualWord + message;
+      console.log("Message received ", message);
+      setWords((state, props) => state + message);
+      console.log("Words: ", words);
+
+    };
+    newSocket.on('message', messageListener);
+    newSocket.on("IsAuto", (auto) => {
+      console.log("IsAuto received", auto);
+      setIsAuto(auto);
+      setLetter("");
+      setWords("");
+      console.log("IsAuto current", isAuto);
+
+    });
+
+    newSocket.on("clear", (data) => {
+      console.log("Clear");
+      setWords("");
+      setLetter("");
+      manualWord = "";
+
+    });
+
+    newSocket.on('reset', () => {
+      console.log("Reset");
+      setWords("");
+      setLetter(null);
+      setIsAuto(true);
+    })
+    newSocket.on('connect', () => {
+      console.log("Socket connected");
+    })
     let serviceLoaded = false;
     let cameraFetched = false;
     cameraSelectEl.current.addEventListener('change', () => changeCamera());
@@ -205,6 +297,7 @@ export default function Page() {
       return Promise.reject(errorMessage);
     }
 
+
     async function load(source) {
       const videoLoaded = await initCamera(source);
       videoLoaded.play();
@@ -217,11 +310,12 @@ export default function Page() {
       }
 
       setLoading(false);
+      // setTimeout(() => { typeLetter("HELLO") }, 10000);
       return videoLoaded;
     }
 
     load();
-  }, []);
+  }, [setSocket, setWords, setLetter]);
 
 
   function reset() {
@@ -230,6 +324,19 @@ export default function Page() {
     setWords("");
   }
 
+  function typeLetter(letter) {
+    let i = 0;
+    // setIsAuto(false);
+
+    setInterval(() => {
+      const interval = setLetter(letter.substring(0, i));
+      console.log(letter[i]);
+      i++;
+      if (!letter[i]) {
+        clearInterval(interval);
+      }
+    }, 2000)
+  }
   function togglePlay() {
     console.log("Toggle playing..", video);
     if (!video) return;
@@ -246,6 +353,7 @@ export default function Page() {
       <h2
         className="text-center text-heading"
         style={{ marginBottom: "0.5em" }}
+        onClick={() => typeLetter("HELLO PARUL")}
       >
         <FontAwesomeIcon icon={faHandPaper} /> DDHelper
       </h2>
