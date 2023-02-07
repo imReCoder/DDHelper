@@ -43,6 +43,7 @@ export default function Page() {
   const [socket, setSocket] = useState(null);
   let [isAuto, setIsAuto] = useState(false);
 
+
   async function guessWord(manualWords) {
     return new Promise((resolve, reject) => {
       const wordsSplit = manualWords.split(" ");
